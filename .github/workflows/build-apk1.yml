@@ -1,6 +1,8 @@
 name: Build CentroTouch APK
 
-on: [push, workflow_dispatch]
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,28 +19,63 @@ jobs:
           java-version: "17"
 
       - name: Extraer proyecto
+        shell: bash
         run: |
+          set -e
+          rm -rf proyecto
           mkdir -p proyecto
-          unzip -o "CentroTouch-project.zip" -d proyecto
+          unzip -o CentroTouch-GitHub.zip -d proyecto
 
       - name: Buscar proyecto y compilar APK
+        shell: bash
         run: |
-          PROJECT_DIR=$(find proyecto -name gradlew -type f -print -quit | xargs dirname)
+          set -e
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No se encontró gradlew dentro del proyecto."
+          echo "Buscando gradlew..."
+
+          GRADLEW=$(find proyecto -type f -name "gradlew" -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: No se encontró el archivo gradlew."
+            echo "Archivos encontrados:"
+            find proyecto -maxdepth 5 -type f | head -100
             exit 1
           fi
 
-          echo "Proyecto encontrado en: $PROJECT_DIR"
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "gradlew encontrado:"
+          echo "$GRADLEW"
+
+          echo "Directorio del proyecto:"
+          echo "$PROJECT_DIR"
 
           cd "$PROJECT_DIR"
+
           chmod +x gradlew
-          ./gradlew assembleDebug
+
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Buscar APK generado
+        shell: bash
+        run: |
+          set -e
+
+          APK=$(find proyecto -type f -name "*.apk" -print -quit)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: No se encontró ningún APK."
+            exit 1
+          fi
+
+          echo "APK encontrado:"
+          echo "$APK"
+
+          mkdir -p apk-final
+          cp "$APK" apk-final/CentroTouch.apk
 
       - name: Guardar APK
         uses: actions/upload-artifact@v4
         with:
           name: CentroTouch-APK
-          path: |
-            proyecto/**/app/build/outputs/apk/debug/*.apk
+          path: apk-final/CentroTouch.apk
