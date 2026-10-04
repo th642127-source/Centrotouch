@@ -1,81 +1,81 @@
 name: Build CentroTouch APK
 
 on:
-  push:
   workflow_dispatch:
+  push:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar código
+      - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Configurar Java
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Extraer proyecto
-        shell: bash
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Buscar ZIP del proyecto
         run: |
           set -e
-          rm -rf proyecto
-          mkdir -p proyecto
-          unzip -o CentroTouch-GitHub.zip -d proyecto
+          ZIP=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
 
-      - name: Buscar proyecto y compilar APK
-        shell: bash
-        run: |
-          set -e
-
-          echo "Buscando gradlew..."
-
-          GRADLEW=$(find proyecto -type f -name "gradlew" -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: No se encontró el archivo gradlew."
-            echo "Archivos encontrados:"
-            find proyecto -maxdepth 5 -type f | head -100
+          if [ -z "$ZIP" ]; then
+            echo "NO SE ENCONTRO EL ZIP DEL PROYECTO"
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
+          echo "ZIP: $ZIP"
+          rm -rf proyecto
+          mkdir proyecto
+          unzip -o "$ZIP" -d proyecto
 
-          echo "gradlew encontrado:"
-          echo "$GRADLEW"
+      - name: Encontrar proyecto Android
+        run: |
+          set -e
 
-          echo "Directorio del proyecto:"
-          echo "$PROJECT_DIR"
+          SETTINGS=$(find proyecto -type f -name "settings.gradle.kts" | head -n 1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "NO SE ENCONTRO settings.gradle.kts"
+            find proyecto -maxdepth 5 -type f | sort
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+
+          echo "Proyecto encontrado en: $PROJECT_DIR"
 
           cd "$PROJECT_DIR"
+          gradle assembleDebug --stacktrace
 
-          chmod +x gradlew
-
-          ./gradlew assembleDebug --stacktrace
-
-      - name: Buscar APK generado
-        shell: bash
+      - name: Encontrar APK
         run: |
           set -e
 
-          APK=$(find proyecto -type f -name "*.apk" -print -quit)
+          APK=$(find proyecto -type f -path "*/build/outputs/apk/debug/*.apk" | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: No se encontró ningún APK."
+            echo "NO SE ENCONTRO EL APK"
+            find proyecto -type f -name "*.apk"
             exit 1
           fi
 
-          echo "APK encontrado:"
-          echo "$APK"
+          echo "APK: $APK"
 
-          mkdir -p apk-final
-          cp "$APK" apk-final/CentroTouch.apk
+          mkdir -p resultado
+          cp "$APK" resultado/CentroTouch.apk
 
       - name: Guardar APK
         uses: actions/upload-artifact@v4
         with:
           name: CentroTouch-APK
-          path: apk-final/CentroTouch.apk
+          path: resultado/CentroTouch.apk
